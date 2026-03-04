@@ -1,10 +1,10 @@
 {
-  "name": "@abdopr/fixed-laravel-echo-server",
-  "version": "0.1.4",
+  "name": "@Oha-you/fixed-laravel-echo-server",
+  "version": "0.1.5",
   "description": "Fixed version of laravel-echo-server (update socket.io version, with other features)",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/AbdoPrDZ/fixed-laravel-echo-server.git"
+    "url": "git+https://github.com/Oha-you/fixed-laravel-echo-server.git"
   },
   "main": "dist/index.js",
   "keywords": [
@@ -16,7 +16,7 @@
     "laravel-echo",
     "laravel-echo-server"
   ],
-  "author": "Abdo Pr",
+  "author": "Oha-you",
   "license": "MIT",
   "jshintConfig": {
     "esversion": 6
@@ -50,9 +50,9 @@
     "fixed-laravel-echo-server": "bin/server.js"
   },
   "bugs": {
-    "url": "https://github.com/AbdoPrDZ/fixed-laravel-echo-server/issues"
+    "url": "https://github.com/Oha-you/fixed-laravel-echo-server/issues"
   },
-  "homepage": "https://github.com/AbdoPrDZ/fixed-laravel-echo-server#readme",
+  "homepage": "https://github.com/Oha-you/fixed-laravel-echo-server#readme",
   "directories": {
     "example": "examples"
   }

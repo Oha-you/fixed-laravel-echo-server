@@ -253,10 +253,11 @@ var EchoServer = (function () {
     EchoServer.prototype.onDisconnecting = function (socket) {
         var _this = this;
         socket.on('disconnecting', function (reason) {
-            Object.keys(socket.rooms).forEach(function (room) { return __awaiter(_this, void 0, void 0, function () {
+            Array.from(socket.rooms).forEach(function (room) { return __awaiter(_this, void 0, void 0, function () {
                 return __generator(this, function (_a) {
-                    if (room !== socket.id)
+                    if (typeof room === "string" && room !== socket.id) {
                         this.channel.leave(socket, room, reason);
+                    }
                     return [2];
                 });
             }); });
