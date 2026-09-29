@@ -102,6 +102,9 @@ export class Channel {
    */
   joinPrivate(socket: any, data: any): void {
     this.private.authenticate(socket, data).then(res => {
+      // The socket disconnected while the auth request was running.
+      if (!socket.connected)
+        return
 
       socket.join(data.channel)
 
@@ -122,6 +125,8 @@ export class Channel {
 
       this.io.sockets.to(socket.id)
         .emit('channel_subscribe_error', data.channel, error.status)
+    }).catch(error => {
+      Log.error(`Error joining ${socket.id} to ${data.channel}: ${error && error.stack ? error.stack : error}`)
     })
   }
 
@@ -158,7 +163,7 @@ export class Channel {
    * Check if a socket has joined a channel.
    */
   isInChannel(socket: any, channel: string): boolean {
-    return !!socket.rooms[channel]
+    return socket.rooms.has(channel)
   }
 
 }

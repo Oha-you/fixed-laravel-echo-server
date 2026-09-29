@@ -111,6 +111,12 @@ export class EchoServer {
       this.options = Object.assign(this.defaultOptions, options)
       this.options.echoServer = this
       this.startup()
+
+      // Log a stray rejected promise instead of letting Bun or Node exit on it.
+      process.on('unhandledRejection', (error: any) => {
+        Log.error(`Unhandled rejection: ${error && error.stack ? error.stack : error}`)
+      })
+
       this.server = new Server(this.options)
 
       this.server.init().then(io => {
@@ -244,7 +250,7 @@ export class EchoServer {
    */
   find(socket_id: string): any {
     const socket = this.server.io.sockets.sockets.get(socket_id)
-    return socket.connected ? socket : null
+    return socket && socket.connected ? socket : null
   }
 
   /**
@@ -379,7 +385,7 @@ export class EchoServer {
    */
   onDisconnecting(socket: any): void {
     socket.on('disconnecting', (reason) => {
-      Array.from(socket.rooms).forEach(async room => {
+      Array.from(socket.rooms).forEach(room => {
         if (typeof room === "string" && room !== socket.id) {
           this.channel.leave(socket, room, reason)
         }

@@ -1,4 +1,5 @@
 import { DatabaseDriver } from './database-driver'
+import { Log } from './../log'
 import Redis from 'ioredis'
 
 export class RedisDatabase implements DatabaseDriver {
@@ -18,9 +19,7 @@ export class RedisDatabase implements DatabaseDriver {
    * Retrieve data from redis.
    */
   get(key: string): Promise<any> {
-    return new Promise<any>((resolve, reject) => {
-      this._redis.get(key).then(value => resolve(JSON.parse(value)))
-    })
+    return this._redis.get(key).then(value => JSON.parse(value))
   }
 
   /**
@@ -28,12 +27,13 @@ export class RedisDatabase implements DatabaseDriver {
    */
   set(key: string, value: any): void {
     this._redis.set(key, JSON.stringify(value))
+      .catch(error => Log.error(`Redis set ${key} failed: ${error}`))
     if (this.options.databaseConfig.publishPresence === true && /^presence-.*:members$/.test(key))
       this._redis.publish('PresenceChannelUpdated', JSON.stringify({
         "event": {
           "channel": key,
           "members": value
         }
-      }))
+      })).catch(error => Log.error(`Redis publish ${key} failed: ${error}`))
   }
 }

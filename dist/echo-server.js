@@ -97,6 +97,9 @@ var EchoServer = (function () {
             _this.options = Object.assign(_this.defaultOptions, options);
             _this.options.echoServer = _this;
             _this.startup();
+            process.on('unhandledRejection', function (error) {
+                log_1.Log.error("Unhandled rejection: ".concat(error && error.stack ? error.stack : error));
+            });
             _this.server = new server_1.Server(_this.options);
             _this.server.init().then(function (io) {
                 _this.init(io, yargs).then(function () {
@@ -180,7 +183,7 @@ var EchoServer = (function () {
     };
     EchoServer.prototype.find = function (socket_id) {
         var socket = this.server.io.sockets.sockets.get(socket_id);
-        return socket.connected ? socket : null;
+        return socket && socket.connected ? socket : null;
     };
     EchoServer.prototype.broadcast = function (channel, message) {
         message.socket = message.socket ? this.find(message.socket) : null;
@@ -253,14 +256,11 @@ var EchoServer = (function () {
     EchoServer.prototype.onDisconnecting = function (socket) {
         var _this = this;
         socket.on('disconnecting', function (reason) {
-            Array.from(socket.rooms).forEach(function (room) { return __awaiter(_this, void 0, void 0, function () {
-                return __generator(this, function (_a) {
-                    if (typeof room === "string" && room !== socket.id) {
-                        this.channel.leave(socket, room, reason);
-                    }
-                    return [2];
-                });
-            }); });
+            Array.from(socket.rooms).forEach(function (room) {
+                if (typeof room === "string" && room !== socket.id) {
+                    _this.channel.leave(socket, room, reason);
+                }
+            });
         });
     };
     EchoServer.prototype.onDisconnected = function (socket) {

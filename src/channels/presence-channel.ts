@@ -9,6 +9,12 @@ export class PresenceChannel {
   db: Database
 
   /**
+   * Pending member updates per channel. Joins and leaves read, change and
+   * write the whole member list, so they run one at a time per channel.
+   */
+  private queues: { [channel: string]: Promise<any> } = {}
+
+  /**
    * Create a new Presence channel instance.
    */
   constructor(private io, private options: any) {
@@ -18,91 +24,84 @@ export class PresenceChannel {
   /**
    * Get the members of a presence channel.
    */
-  getMembers(channel: string): Promise<any> {
-    return this.db.get(channel + ":members")
+  getMembers(channel: string): Promise<any[]> {
+    return this.db.get(channel + ":members").then((members) => members || [])
   }
 
   /**
    * Check if a user is on a presence channel.
    */
-  isMember(channel: string, member: any): Promise<boolean> {
-    return new Promise((resolve, reject) => {
-      this.getMembers(channel).then(
-        (members) => {
-          this.removeInactive(channel, members, member).then(
-            (members: any) => {
-              const search = members.filter(
-                (m: { user_id: any }) => m.user_id == member.user_i
-              )
-
-              if (search && search.length)
-                resolve(true)
-
-              resolve(false)
-            }
-          )
-        },
-        (error) => Log.error(error)
-      )
-    })
+  isMember(members: any[], member: any): boolean {
+    return members.some((m: { user_id: any }) => m.user_id == member.user_id)
   }
 
   /**
    * Remove inactive channel members from the presence channel.
    */
-  removeInactive(channel: string, members: any[], member: any): Promise<any> {
-    return new Promise((resolve, reject) => {
-      this.io.of("/").in(channel).fetchSockets().then((clients) => {
+  removeInactive(channel: string, members: any[]): Promise<any[]> {
+    return this.io.of("/").in(channel).fetchSockets().then((clients) => {
+      members = members.filter((member) => clients.find((client) => client.id == member.socketId) != null)
 
-        members = members || []
-        members = members.filter((member) => clients.find((client) => client.id == member.socketId) != null)
+      this.db.set(channel + ":members", members)
 
-        this.db.set(channel + ":members", members)
-
-        resolve(members)
-      })
+      return members
     })
+  }
+
+  /**
+   * Run a member update after the pending ones on the same channel.
+   */
+  queue(channel: string, task: () => Promise<any>): Promise<any> {
+    const previous = this.queues[channel] || Promise.resolve()
+    const next = previous.then(task).catch((error) => {
+      Log.error(`Presence channel ${channel}: ${error && error.stack ? error.stack : error}`)
+    })
+
+    this.queues[channel] = next
+    next.then(() => {
+      if (this.queues[channel] === next)
+        delete this.queues[channel]
+    })
+
+    return next
   }
 
   /**
    * Join a presence channel and emit that they have joined only if it is the
    * first instance of their presence.
    */
-  join(socket: any, channel: string, member: any) {
-    Log.info(`${socket.id} - ${member} - Joining to presence channel ${channel}`, true)
+  join(socket: any, channel: string, member: any): Promise<any> {
     if (!member) {
       if (this.options.devMode)
         Log.error(
           "Unable to join channel. Member data for presence channel missing"
         )
 
-      return
+      return Promise.resolve()
     }
 
-    this.isMember(channel, member).then(
-      (is_member) => {
-        this.getMembers(channel).then(
-          (members) => {
-            members = members || []
-            member.socketId = socket.id
-            members.push(member)
+    Log.info(`${socket.id} - ${member.user_id} - Joining to presence channel ${channel}`, true)
 
-            this.db.set(channel + ":members", members)
+    return this.queue(channel, () =>
+      this.getMembers(channel)
+        .then((members) => this.removeInactive(channel, members))
+        .then((members) => {
+          if (!socket.connected)
+            return
 
-            members = _.uniqBy(members.reverse(), "user_id")
+          const is_member = this.isMember(members, member)
 
-            this.onSubscribed(socket, channel, members)
+          member.socketId = socket.id
+          members = members.filter((m) => m.socketId != socket.id)
+          members.push(member)
 
-            if (!is_member) {
-              this.onJoin(socket, channel, member)
-            }
-          },
-          (error) => Log.error(error)
-        )
-      },
-      () => {
-        Log.error("Error retrieving pressence channel members.")
-      }
+          this.db.set(channel + ":members", members)
+
+          this.onSubscribed(socket, channel, _.uniqBy(members.slice().reverse(), "user_id"))
+
+          if (!is_member)
+            this.onJoin(socket, channel, member)
+        })
     )
   }
 
@@ -110,25 +109,24 @@ export class PresenceChannel {
    * Remove a member from a presenece channel and broadcast they have left
    * only if not other presence channel instances exist.
    */
-  leave(socket: any, channel: string): void {
-    this.getMembers(channel).then(
-      (members) => {
-        members = members || []
-        const member = members.find(
-          (member: { socketId: any }) => member.socketId == socket.id
-        )
-        members = members.filter((m) => m.socketId != member.socketId)
+  leave(socket: any, channel: string): Promise<any> {
+    return this.queue(channel, () =>
+      this.getMembers(channel).then((members) => {
+        const member = members.find((m) => m.socketId == socket.id)
 
-        this.db.set(channel + ":members", members)
+        // Not a member: the join never finished, failed auth or was already removed.
+        if (!member)
+          return
 
-        this.isMember(channel, member).then((is_member) => {
-          if (!is_member) {
+        members = members.filter((m) => m.socketId != socket.id)
+
+        return this.removeInactive(channel, members).then((members) => {
+          if (!this.isMember(members, member)) {
             delete member.socketId
             this.onLeave(channel, member)
           }
         })
-      },
-      (error) => Log.error(error)
+      })
     )
   }
 

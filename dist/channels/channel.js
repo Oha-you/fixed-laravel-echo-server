@@ -62,6 +62,8 @@ var Channel = (function () {
     Channel.prototype.joinPrivate = function (socket, data) {
         var _this = this;
         this.private.authenticate(socket, data).then(function (res) {
+            if (!socket.connected)
+                return;
             socket.join(data.channel);
             if (_this.isPresence(data.channel)) {
                 var member = res.channel_data;
@@ -78,6 +80,8 @@ var Channel = (function () {
                 log_1.Log.error(error.reason);
             _this.io.sockets.to(socket.id)
                 .emit('channel_subscribe_error', data.channel, error.status);
+        }).catch(function (error) {
+            log_1.Log.error("Error joining ".concat(socket.id, " to ").concat(data.channel, ": ").concat(error && error.stack ? error.stack : error));
         });
     };
     Channel.prototype.isPresence = function (channel) {
@@ -97,7 +101,7 @@ var Channel = (function () {
         return isClientEvent;
     };
     Channel.prototype.isInChannel = function (socket, channel) {
-        return !!socket.rooms[channel];
+        return socket.rooms.has(channel);
     };
     return Channel;
 }());
